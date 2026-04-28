@@ -3,10 +3,10 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>VDC SAFETY - REMOTE DASHBOARD</title>
+    <title>VDC SAFETY - REMOTE CONTROL</title>
     <script type="module">
         import { initializeApp } from "https://www.gstatic.com/firebasejs/12.12.1/firebase-app.js";
-        import { getDatabase, ref, onValue } from "https://www.gstatic.com/firebasejs/12.12.1/firebase-database.js";
+        import { getDatabase, ref, onValue, set, update } from "https://www.gstatic.com/firebasejs/12.12.1/firebase-database.js";
 
         const firebaseConfig = {
             apiKey: "AIzaSyD0g2jxFOY5KQGZeZWyJf0SDxA91sitpxE",
@@ -20,8 +20,49 @@
 
         const app = initializeApp(firebaseConfig);
         const db = getDatabase(app);
+        const GAS_URL = "https://script.google.com/macros/s/AKfycbyYCwNwlzsF2X12b18vGuttZBirTPkvTMnoOWL4MFC6rVFAaM1XFJQgHfFjGPZWWosp/exec";
 
-        // Lắng nghe thông báo hệ thống
+        // 1. LẤY DANH SÁCH THƯ MỤC TỪ GAS
+        window.onload = () => {
+            fetch(`${GAS_URL}?action=getFolders`)
+            .then(res => res.json())
+            .then(data => {
+                const sel = document.getElementById('folderSelect');
+                data.forEach(f => {
+                    let opt = document.createElement('option');
+                    opt.value = f.id;
+                    opt.text = f.name;
+                    sel.add(opt);
+                });
+                document.getElementById('sysStatus').innerText = "🟢 Đã tải xong danh sách thư mục.";
+            }).catch(e => {
+                document.getElementById('sysStatus').innerText = "❌ Lỗi kết nối GAS. Hãy kiểm tra Deploy Anyone.";
+            });
+        };
+
+        // 2. GỬI LỆNH ĐIỀU KHIỂN LÊN FIREBASE
+        window.startGrading = function() {
+            const sel = document.getElementById('folderSelect');
+            const folderId = sel.value;
+            const folderName = sel.options[sel.selectedIndex].text;
+            
+            if(!folderId) return alert("Vui lòng chọn thư mục!");
+
+            set(ref(db, 'control'), {
+                status: "running",
+                current_folder_id: folderId,
+                current_folder_name: folderName,
+                timestamp: Date.now()
+            });
+            alert("🚀 Đã gửi lệnh Bắt đầu! GAS sẽ tự chạy qua Trigger.");
+        };
+
+        window.stopGrading = function() {
+            update(ref(db, 'control'), { status: "stopped" });
+            alert("🛑 Đã gửi lệnh Dừng.");
+        };
+
+        // 3. LẮNG NGHE DỮ LIỆU REALTIME
         onValue(ref(db, 'status'), (snap) => {
             const data = snap.val();
             if(data) {
@@ -31,51 +72,61 @@
             }
         });
 
-        // Lắng nghe danh sách học viên nhảy điểm
         onValue(ref(db, 'current_results'), (snap) => {
             const data = snap.val();
             const tbody = document.getElementById('studentData');
             tbody.innerHTML = "";
             if(!data) return;
 
-            // Hiển thị kết quả của folder gần nhất
             const folders = Object.keys(data);
             const latestFolder = folders[folders.length - 1];
             const results = data[latestFolder];
 
             Object.keys(results).sort().forEach(stt => {
                 const s = results[stt];
-                const row = `<tr>
+                tbody.innerHTML += `<tr>
                     <td><b>${stt}</b></td>
                     <td>${s.name}</td>
                     <td style="color:red; font-weight:bold">${s.score}</td>
                     <td><small>${s.time}</small></td>
                 </tr>`;
-                tbody.innerHTML += row;
             });
         });
     </script>
     <style>
-        body { font-family: 'Segoe UI', Tahoma, sans-serif; padding: 20px; background: #f0f2f5; }
-        .card { max-width: 800px; margin: auto; background: white; padding: 25px; border-radius: 15px; box-shadow: 0 4px 20px rgba(0,0,0,0.08); }
-        h2 { text-align: center; color: #1a73e8; margin-bottom: 20px; }
-        #sysStatus { padding: 15px; text-align: center; border-radius: 8px; margin-bottom: 20px; font-weight: bold; transition: 0.3s; }
-        table { width: 100%; border-collapse: collapse; margin-top: 10px; }
+        body { font-family: 'Segoe UI', sans-serif; padding: 20px; background: #f0f2f5; line-height: 1.6; }
+        .card { max-width: 800px; margin: auto; background: white; padding: 25px; border-radius: 15px; box-shadow: 0 4px 20px rgba(0,0,0,0.1); }
+        h2 { text-align: center; color: #1a73e8; }
+        #sysStatus { padding: 12px; text-align: center; border-radius: 8px; margin-bottom: 20px; font-weight: bold; border: 1px solid #ddd; }
+        .controls { display: flex; gap: 10px; margin-bottom: 20px; flex-wrap: wrap; }
+        select { flex: 2; padding: 10px; border-radius: 6px; border: 1px solid #ccc; min-width: 200px; }
+        button { flex: 1; padding: 10px; border-radius: 6px; border: none; font-weight: bold; cursor: pointer; color: white; min-width: 120px; }
+        .btn-start { background: #28a745; }
+        .btn-stop { background: #dc3545; }
+        table { width: 100%; border-collapse: collapse; }
         th, td { padding: 12px; border-bottom: 1px solid #eee; text-align: left; }
-        th { background: #f8f9fa; color: #555; }
-        tr:hover { background: #fcfcfc; }
+        th { background: #f8f9fa; }
     </style>
 </head>
 <body>
     <div class="card">
-        <h2>VDC SAFETY - BẢNG ĐIỂM ONLINE</h2>
-        <div id="sysStatus">Đang kết nối Firebase...</div>
+        <h2>VDC SAFETY REMOTE CONTROL</h2>
+        <div id="sysStatus">🔄 Đang tải dữ liệu...</div>
+        
+        <div class="controls">
+            <select id="folderSelect">
+                <option value="">-- Chọn thư mục chấm bài --</option>
+            </select>
+            <button class="btn-start" onclick="startGrading()">🚀 BẮT ĐẦU</button>
+            <button class="btn-stop" onclick="stopGrading()">⏹ DỪNG</button>
+        </div>
+
         <table>
             <thead>
                 <tr><th>STT</th><th>Học viên</th><th>Điểm</th><th>Thời gian</th></tr>
             </thead>
             <tbody id="studentData">
-                <tr><td colspan="4" style="text-align:center">Đang đợi bài chấm đầu tiên...</td></tr>
+                <tr><td colspan="4" style="text-align:center">Đang chờ lệnh từ giảng viên...</td></tr>
             </tbody>
         </table>
     </div>
