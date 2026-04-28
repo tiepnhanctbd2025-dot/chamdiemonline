@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>VDC SAFETY - REMOTE CONTROL</title>
+    <title>VDC SAFETY - REMOTE DASHBOARD</title>
     <script type="module">
         import { initializeApp } from "https://www.gstatic.com/firebasejs/12.12.1/firebase-app.js";
         import { getDatabase, ref, onValue, set, update } from "https://www.gstatic.com/firebasejs/12.12.1/firebase-database.js";
@@ -13,8 +13,6 @@
             authDomain: "chamdiemonline-898b1.firebaseapp.com",
             projectId: "chamdiemonline-898b1",
             databaseURL: "https://chamdiemonline-898b1-default-rtdb.firebaseio.com/",
-            storageBucket: "chamdiemonline-898b1.firebasestorage.app",
-            messagingSenderId: "1073615877091",
             appId: "1:1073615877091:web:b70fa88f2cf740085fe6d6"
         };
 
@@ -22,53 +20,44 @@
         const db = getDatabase(app);
         const GAS_URL = "https://script.google.com/macros/s/AKfycbyYCwNwlzsF2X12b18vGuttZBirTPkvTMnoOWL4MFC6rVFAaM1XFJQgHfFjGPZWWosp/exec";
 
-        // 1. LẤY DANH SÁCH THƯ MỤC TỪ GAS
         window.onload = () => {
             fetch(`${GAS_URL}?action=getFolders`)
             .then(res => res.json())
             .then(data => {
                 const sel = document.getElementById('folderSelect');
-                data.forEach(f => {
-                    let opt = document.createElement('option');
-                    opt.value = f.id;
-                    opt.text = f.name;
-                    sel.add(opt);
-                });
-                document.getElementById('sysStatus').innerText = "🟢 Đã tải xong danh sách thư mục.";
-            }).catch(e => {
-                document.getElementById('sysStatus').innerText = "❌ Lỗi kết nối GAS. Hãy kiểm tra Deploy Anyone.";
+                data.forEach(f => sel.add(new Option(f.name, f.id)));
             });
         };
 
-        // 2. GỬI LỆNH ĐIỀU KHIỂN LÊN FIREBASE
-        window.startGrading = function() {
+        window.toggleGrading = function(action) {
             const sel = document.getElementById('folderSelect');
-            const folderId = sel.value;
-            const folderName = sel.options[sel.selectedIndex].text;
-            
-            if(!folderId) return alert("Vui lòng chọn thư mục!");
-
-            set(ref(db, 'control'), {
-                status: "running",
-                current_folder_id: folderId,
-                current_folder_name: folderName,
-                timestamp: Date.now()
-            });
-            alert("🚀 Đã gửi lệnh Bắt đầu! GAS sẽ tự chạy qua Trigger.");
+            if (action === 'start') {
+                if(!sel.value) return alert("Vui lòng chọn thư mục!");
+                set(ref(db, 'control'), {
+                    status: "running",
+                    current_folder_id: sel.value,
+                    current_folder_name: sel.options[sel.selectedIndex].text,
+                    timestamp: Date.now()
+                });
+            } else {
+                update(ref(db, 'control'), { status: "stopped" });
+            }
         };
 
-        window.stopGrading = function() {
-            update(ref(db, 'control'), { status: "stopped" });
-            alert("🛑 Đã gửi lệnh Dừng.");
-        };
+        onValue(ref(db, 'control'), (snap) => {
+            const data = snap.val();
+            const isRun = data && data.status === "running";
+            document.getElementById('btnStart').style.display = isRun ? "none" : "block";
+            document.getElementById('btnStop').style.display = isRun ? "block" : "none";
+            document.getElementById('folderSelect').disabled = isRun;
+        });
 
-        // 3. LẮNG NGHE DỮ LIỆU REALTIME
         onValue(ref(db, 'status'), (snap) => {
             const data = snap.val();
             if(data) {
                 const el = document.getElementById('sysStatus');
                 el.innerText = data.msg;
-                el.style.backgroundColor = data.color === 'green' ? '#d4edda' : '#fff3cd';
+                el.className = "status-bar " + (data.color || "blue");
             }
         });
 
@@ -77,57 +66,41 @@
             const tbody = document.getElementById('studentData');
             tbody.innerHTML = "";
             if(!data) return;
-
-            const folders = Object.keys(data);
-            const latestFolder = folders[folders.length - 1];
+            const latestFolder = Object.keys(data).pop();
             const results = data[latestFolder];
-
             Object.keys(results).sort().forEach(stt => {
                 const s = results[stt];
-                tbody.innerHTML += `<tr>
-                    <td><b>${stt}</b></td>
-                    <td>${s.name}</td>
-                    <td style="color:red; font-weight:bold">${s.score}</td>
-                    <td><small>${s.time}</small></td>
-                </tr>`;
+                tbody.innerHTML += `<tr><td>${stt}</td><td>${s.name}</td><td class="score">${s.score}</td><td><span class="badge">${s.status}</span></td></tr>`;
             });
         });
     </script>
     <style>
-        body { font-family: 'Segoe UI', sans-serif; padding: 20px; background: #f0f2f5; line-height: 1.6; }
-        .card { max-width: 800px; margin: auto; background: white; padding: 25px; border-radius: 15px; box-shadow: 0 4px 20px rgba(0,0,0,0.1); }
-        h2 { text-align: center; color: #1a73e8; }
-        #sysStatus { padding: 12px; text-align: center; border-radius: 8px; margin-bottom: 20px; font-weight: bold; border: 1px solid #ddd; }
-        .controls { display: flex; gap: 10px; margin-bottom: 20px; flex-wrap: wrap; }
-        select { flex: 2; padding: 10px; border-radius: 6px; border: 1px solid #ccc; min-width: 200px; }
-        button { flex: 1; padding: 10px; border-radius: 6px; border: none; font-weight: bold; cursor: pointer; color: white; min-width: 120px; }
-        .btn-start { background: #28a745; }
-        .btn-stop { background: #dc3545; }
-        table { width: 100%; border-collapse: collapse; }
-        th, td { padding: 12px; border-bottom: 1px solid #eee; text-align: left; }
-        th { background: #f8f9fa; }
+        body { font-family: 'Segoe UI', sans-serif; padding: 15px; background: #f4f6f9; }
+        .card { max-width: 600px; margin: auto; background: white; padding: 20px; border-radius: 12px; box-shadow: 0 4px 15px rgba(0,0,0,0.1); }
+        .status-bar { padding: 12px; border-radius: 8px; text-align: center; font-weight: bold; margin-bottom: 15px; border: 1px solid #ddd; }
+        .blue { background: #e7f3ff; color: #007bff; } .green { background: #d4edda; color: #28a745; } .orange { background: #fff3cd; color: #856404; }
+        .controls { display: flex; gap: 10px; margin-bottom: 20px; }
+        select { flex: 1; padding: 10px; border-radius: 6px; border: 1px solid #ccc; }
+        button { padding: 10px 20px; border-radius: 6px; border: none; font-weight: bold; cursor: pointer; color: white; }
+        .btn-start { background: #28a745; } .btn-stop { background: #dc3545; }
+        table { width: 100%; border-collapse: collapse; font-size: 14px; }
+        th, td { padding: 10px; border-bottom: 1px solid #eee; text-align: left; }
+        .score { color: #d93025; font-weight: bold; }
+        .badge { background: #eee; padding: 2px 6px; border-radius: 4px; font-size: 11px; }
     </style>
 </head>
 <body>
     <div class="card">
-        <h2>VDC SAFETY REMOTE CONTROL</h2>
-        <div id="sysStatus">🔄 Đang tải dữ liệu...</div>
-        
+        <h3 style="text-align:center; color:#1a73e8;">VDC SAFETY MONITOR</h3>
+        <div id="sysStatus" class="status-bar blue">Đang khởi động hệ thống...</div>
         <div class="controls">
-            <select id="folderSelect">
-                <option value="">-- Chọn thư mục chấm bài --</option>
-            </select>
-            <button class="btn-start" onclick="startGrading()">🚀 BẮT ĐẦU</button>
-            <button class="btn-stop" onclick="stopGrading()">⏹ DỪNG</button>
+            <select id="folderSelect"><option value="">-- Chọn thư mục --</option></select>
+            <button id="btnStart" class="btn-start" onclick="toggleGrading('start')">BẮT ĐẦU</button>
+            <button id="btnStop" class="btn-stop" onclick="toggleGrading('stop')" style="display:none;">DỪNG</button>
         </div>
-
         <table>
-            <thead>
-                <tr><th>STT</th><th>Học viên</th><th>Điểm</th><th>Thời gian</th></tr>
-            </thead>
-            <tbody id="studentData">
-                <tr><td colspan="4" style="text-align:center">Đang chờ lệnh từ giảng viên...</td></tr>
-            </tbody>
+            <thead><tr><th>STT</th><th>Học viên</th><th>Điểm</th><th>Trạng thái</th></tr></thead>
+            <tbody id="studentData"></tbody>
         </table>
     </div>
 </body>
