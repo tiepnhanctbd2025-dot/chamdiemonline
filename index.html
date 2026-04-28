@@ -1,0 +1,77 @@
+<!DOCTYPE html>
+<html lang="vi">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>VDC SAFETY - REMOTE MONITORING</title>
+    <script type="module">
+        import { initializeApp } from "https://www.gstatic.com/firebasejs/12.12.1/firebase-app.js";
+        import { getDatabase, ref, onValue } from "https://www.gstatic.com/firebasejs/12.12.1/firebase-database.js";
+
+        const firebaseConfig = {
+            apiKey: "AIzaSyD0g2jxFOY5KQGZeZWyJf0SDxA91sitpxE",
+            authDomain: "chamdiemonline-898b1.firebaseapp.com",
+            projectId: "chamdiemonline-898b1",
+            databaseURL: "https://chamdiemonline-898b1-default-rtdb.firebaseio.com/",
+            storageBucket: "chamdiemonline-898b1.firebasestorage.app",
+            messagingSenderId: "1073615877091",
+            appId: "1:1073615877091:web:b70fa88f2cf740085fe6d6"
+        };
+
+        const app = initializeApp(firebaseConfig);
+        const db = getDatabase(app);
+
+        // 1. Lắng nghe trạng thái hệ thống (Cảnh báo bài 00)
+        onValue(ref(db, 'status'), (snap) => {
+            const data = snap.val();
+            if(data) {
+                const el = document.getElementById('sysMsg');
+                el.innerText = data.msg;
+                el.style.color = data.color;
+            }
+        });
+
+        // 2. Lắng nghe danh sách học viên nhảy điểm
+        onValue(ref(db, 'current_results'), (snap) => {
+            const data = snap.val();
+            const tbody = document.getElementById('studentData');
+            tbody.innerHTML = "";
+            if(data) {
+                // Sắp xếp theo STT
+                Object.keys(data).sort().forEach(stt => {
+                    const s = data[stt];
+                    const row = `<tr>
+                        <td><b>${stt}</b></td>
+                        <td>${s.name}</td>
+                        <td class="score">${s.score}</td>
+                        <td>${s.status}</td>
+                    </tr>`;
+                    tbody.innerHTML += row;
+                });
+            }
+        });
+    </script>
+    <style>
+        body { font-family: sans-serif; padding: 20px; background: #f4f7f6; }
+        .dashboard { max-width: 800px; margin: auto; background: white; padding: 20px; border-radius: 10px; box-shadow: 0 4px 10px rgba(0,0,0,0.1); }
+        h2 { text-align: center; color: #1a73e8; }
+        #sysMsg { text-align: center; font-weight: bold; padding: 10px; background: #fff3cd; border-radius: 5px; margin-bottom: 20px; }
+        table { width: 100%; border-collapse: collapse; }
+        th, td { padding: 12px; border-bottom: 1px solid #ddd; text-align: left; }
+        th { background: #1a73e8; color: white; }
+        .score { font-size: 18px; font-weight: bold; color: #d93025; }
+    </style>
+</head>
+<body>
+    <div class="dashboard">
+        <h2>VDC SAFETY ONLINE MONITORING</h2>
+        <div id="sysMsg">Đang khởi động hệ thống...</div>
+        <table>
+            <thead>
+                <tr><th>STT</th><th>Học viên</th><th>Điểm số</th><th>Trạng thái</th></tr>
+            </thead>
+            <tbody id="studentData"></tbody>
+        </table>
+    </div>
+</body>
+</html>
